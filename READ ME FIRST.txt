@@ -1,0 +1,107 @@
+SMUNOPOLY — RA Training 2026-2027
+=================================
+
+HOW TO START IT
+---------------
+Open the web address for the board in any browser. Bookmark it.
+
+The first time, you'll see two buttons:
+   "Start a New Game"          - begins fresh, all teams on GO with $1,500
+   "Continue a Saved Game"     - opens a game file you saved earlier
+
+That's it. Nothing to install, no accounts, no passwords.
+
+TIP: for a projector, click the "Full Screen" button in the top right.
+
+NO INTERNET? Double-click index.html and it runs the same way, straight
+off the computer. Worth keeping a copy on a flash drive just in case.
+
+
+THE FOUR GAME PIECES
+--------------------
+   Silver surfboard      Teal evergreen tree
+   Orange top hat        Light blue rubber duck
+
+All four start on GO. Each team starts with $1,500.
+
+
+THE FIVE THINGS YOU'LL DO
+-------------------------
+1. MOVE A PIECE
+   Click the piece. It starts glowing yellow.
+   Click the square you want it on. Done.
+   (Changed your mind? Press the Esc key.)
+
+2. ADD OR TAKE AWAY MONEY
+   Each team has a card on the right side of the screen.
+   Type an amount in the little box, then click "+ Add" or "- Take".
+   There are also one-click buttons for +$200 GO, +$50 and +$100.
+
+3. PUT A HOTEL ON A SQUARE
+   Click the square (not a piece).
+   Click the team that won the bid.
+   The hotel appears in that team's color.
+   To remove it, click the square again and choose "No hotel".
+
+4. CHARGE RENT
+   Click the square. The rent is already filled in.
+   Click "<team> pays". It takes the money from that team and gives it
+   to whoever owns the square automatically. If nobody owns it, the
+   money just goes to the bank.
+   (You can type a different number first — handy for the Maintenance
+   utility square, where rent is the dice roll times 4.)
+
+   There is also a "Pay Rent / Move Money" box at the top of the right
+   side for moving cash between any two teams.
+
+5. FIX A MISTAKE
+   Click "Undo" at the top. It steps back one change at a time.
+
+
+SAVING AND CONTINUING
+---------------------
+The game saves like a Word document: you save it to a file, and you open
+that file to pick back up.
+
+TO SAVE, at the end of each day:
+   Click "Save Game" (the green button at the top).
+   A file lands in your Downloads folder named something like
+      smunopoly-2026-08-14-1630.json
+   That file IS the game. Keep it somewhere you'll find it. Emailing it
+   to yourself or dropping it on a flash drive is a fine idea.
+
+TO PICK BACK UP the next morning:
+   Open the website.
+   Click "Continue Game".
+   Find your smunopoly-....json file and open it.
+   The board comes back exactly as you left it.
+
+This works on ANY computer. Save on one laptop, carry the file, open it
+on another — the game comes with you.
+
+WATCH THE BADGE at the top of the screen:
+
+   "Game saved"        Your file is up to date.
+   "Unsaved changes"   You've moved things since your last save.
+                       Click "Save Game" again.
+
+If you try to close the tab with unsaved changes, the browser will stop
+and ask you first.
+
+The browser also quietly remembers the game on its own, so accidentally
+closing the tab isn't a disaster. Don't lean on it though — school
+computers get wiped. The file you download is the real save.
+
+The "Start Over" button wipes the board back to day one. It asks twice,
+and it does not touch any file you already saved.
+
+
+NEED THE RULES?
+---------------
+Click the "? Rules" button at the top. The whole rule sheet is in there.
+
+
+FOR WHOEVER SET THIS UP
+-----------------------
+See README.md for how it's hosted and how to change square names,
+rents or the starting cash.

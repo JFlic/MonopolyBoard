@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SMUNOPOLY — RA Training 2026-2027</title>
+<style>
+/* ============================================================
+   SMUNOPOLY — RA Training board
+   Single self-contained file. No internet needed.
+   ============================================================ */
+
+:root{
+  --green:#cde5cd;
+  --ink:#111;
+  --red:#ed1b24;
+  --grp-gray:#b3b3b3;
+  --grp-teal:#17696b;
+  --grp-blue:#aec8e8;
+  --grp-orange:#ef8b3c;
+  --u:8px;                        /* set by JS: 1% of the board's width */
+  --bar:calc(var(--u)*3.2);       /* thickness of the colour-group stripe */
+  --tok:calc(var(--u)*5);         /* game-piece size; JS recalculates it per square */
+  --panel:#f7f7f4;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  background:#2f3b2f; color:#111; overflow:hidden;
+}
+button{font:inherit;cursor:pointer}
+input{font:inherit}
+
+/* ---------- app shell ---------- */
+#app{display:flex;flex-direction:column;height:100vh}
+
+#topbar{
+  flex:0 0 auto;display:flex;align-items:center;gap:10px;
+  padding:8px 14px;background:#1d261d;color:#fff;
+}
+#topbar h1{font-size:18px;margin:0;letter-spacing:2px;font-weight:800}
+#topbar h1 span{color:#ff6b6b}
+#hint{
+  flex:1;text-align:center;font-size:16px;font-weight:700;
+  background:#31402f;border-radius:20px;padding:7px 16px;color:#e8f5e8;
+}
+#hint.active{background:#ffd54f;color:#2b2b00}
+#sync{
+  font-size:12px;font-weight:700;padding:6px 11px;border-radius:20px;
+  white-space:nowrap;flex:0 0 auto;
+}
+#sync.ok{background:#2c4a2c;color:#a8e6a8}
+#sync.busy{background:#4a462c;color:#f0e0a0}
+#sync.bad{background:#5c2b2b;color:#ffc9c9}
+.tbtn{
+  background:#3d4d3b;color:#fff;border:1px solid #6b7d68;border-radius:7px;
+  padding:7px 12px;font-size:13px;font-weight:600;
+}
+.tbtn:hover{background:#526651}
+.tbtn.warn{background:#7a2b2b;border-color:#a94b4b}
+.tbtn.save{background:#2f6b3a;border-color:#54a065}
+.tbtn.save:hover{background:#3d8a4b}
+
+#main{flex:1;display:flex;min-height:0}
+
+#boardWrap{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  padding:10px;min-width:0;min-height:0;
+}
+
+/* ---------- board ---------- */
+#board{
+  aspect-ratio:2000/1478;
+  height:100%;width:auto;max-width:100%;
+  display:grid;
+  /* The ring of squares is deliberately fat: each band is 16% of the board's
+     width, which makes every square big and leaves only a modest centre. */
+  grid-template-columns:1.882fr repeat(8,1fr) 1.882fr;
+  grid-template-rows:2.291fr repeat(6,1fr) 2.291fr;
+  background:var(--green);
+  border:calc(var(--u)*0.28) solid var(--ink);
+  position:relative;
+  box-shadow:0 6px 30px rgba(0,0,0,.5);
+}
+
+.tile{
+  position:relative;
+  border:calc(var(--u)*0.12) solid var(--ink);
+  background:var(--green);
+  overflow:hidden;
+  user-select:none;
+}
+.tile.clickable{cursor:pointer}
+.tile.clickable:hover{background:#dff0df}
+#board.picking .tile{outline:calc(var(--u)*0.12) dashed rgba(0,0,0,.35);outline-offset:calc(var(--u)*-0.3)}
+#board.picking .tile:hover{background:#fff3b0}
+
+/* ---------- tile face: every square reads straight across ---------- */
+/* The colour bar hugs whichever edge faces the middle of the board,
+   but no text or icon is ever rotated. */
+.bar{position:absolute;background:#000;z-index:1}
+.side-bottom .bar{top:0;left:0;right:0;height:var(--bar);border-bottom:calc(var(--u)*0.12) solid var(--ink)}
+.side-top    .bar{bottom:0;left:0;right:0;height:var(--bar);border-top:calc(var(--u)*0.12) solid var(--ink)}
+.side-left   .bar{right:0;top:0;bottom:0;width:var(--bar);border-left:calc(var(--u)*0.12) solid var(--ink)}
+.side-right  .bar{left:0;top:0;bottom:0;width:var(--bar);border-right:calc(var(--u)*0.12) solid var(--ink)}
+
+.label{
+  position:absolute;inset:0;z-index:2;
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  padding:calc(var(--u)*0.3) calc(var(--u)*0.2);
+  text-align:center;line-height:1.05;pointer-events:none;
+}
+.side-bottom .label{padding-top:calc(var(--bar) + var(--u)*0.3)}
+.side-top    .label{padding-bottom:calc(var(--bar) + var(--u)*0.3)}
+.side-left   .label{padding-right:calc(var(--bar) + var(--u)*0.3)}
+.side-right  .label{padding-left:calc(var(--bar) + var(--u)*0.3)}
+
+/* --nm is set per square in JS so long names shrink to fit instead of spilling.
+   Name sits at the top, rent at the bottom, icon tucked under the name — the
+   gap between them is the only place game pieces are allowed to go. */
+.tname{font-size:calc(var(--u)*var(--nm,1));font-weight:800;text-transform:uppercase;letter-spacing:0}
+.trent{font-size:calc(var(--u)*var(--rt,0.9));font-weight:700;margin-top:auto}
+.ticon{font-size:calc(var(--u)*3.2);line-height:1;flex:0 0 auto;margin-top:calc(var(--u)*0.15)}
+.qmark{font-size:calc(var(--u)*4);font-weight:900;color:var(--red);line-height:1}
+
+/* ---------- game pieces ---------- */
+/* JS parks this box in the clear strip between the name and the rent, then
+   sizes the pieces so however many share a square all fit side by side.
+   They hug the bottom of that strip, so an icon above stays half visible. */
+.tokens{
+  position:absolute;inset:0;z-index:5;
+  display:flex;flex-wrap:wrap;gap:calc(var(--u)*0.16);
+  align-items:flex-end;justify-content:center;align-content:flex-end;
+  padding:calc(var(--u)*0.3);
+}
+.tok{
+  width:var(--tok);height:var(--tok);
+  border-radius:50%;background:#fffdf5;
+  border:calc(var(--u)*0.16) solid #222;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;box-shadow:0 calc(var(--u)*0.06) calc(var(--u)*0.18) rgba(0,0,0,.5);
+  flex:0 0 auto;transition:transform .12s;
+}
+.tok svg{width:78%;height:78%;display:block}
+.tok:hover{transform:scale(1.09)}
+.tok.sel{
+  box-shadow:0 0 0 calc(var(--u)*0.26) #ffd54f, 0 0 0 calc(var(--u)*0.42) #b58900;
+  animation:pulse 1s ease-in-out infinite;
+}
+@keyframes pulse{50%{transform:scale(1.1)}}
+
+.hotelSlot{
+  position:absolute;z-index:6;pointer-events:none;
+  width:calc(var(--u)*3.6);height:calc(var(--u)*3.6);
+}
+.hotelSlot svg{width:100%;height:100%;filter:drop-shadow(0 1px 3px rgba(0,0,0,.6))}
+.side-bottom .hotelSlot{top:calc(var(--u)*-0.05);left:50%;transform:translateX(-50%)}
+.side-top    .hotelSlot{bottom:calc(var(--u)*-0.05);left:50%;transform:translateX(-50%)}
+.side-left   .hotelSlot{right:calc(var(--u)*-0.05);top:50%;transform:translateY(-50%)}
+.side-right  .hotelSlot{left:calc(var(--u)*-0.05);top:50%;transform:translateY(-50%)}
+
+/* ---------- corners ---------- */
+.corner{display:flex;align-items:center;justify-content:center;position:relative}
+/* Corner wording is pinned to the top; the bottom is reserved for game
+   pieces so they never sit on the words. */
+.cornerInner{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:flex-start;text-align:center;
+  pointer-events:none;padding:6% 4% 0;
+}
+/* GO and Free Parking sit dead centre in their square instead. */
+.cornerInner.mid{justify-content:center;padding:4%}
+.cornerInner .big{font-size:calc(var(--u)*2.4);font-weight:900;letter-spacing:1px}
+.cornerInner .sm{font-size:calc(var(--u)*1.15);font-weight:700;text-transform:uppercase;line-height:1.2}
+.cornerInner .emoji{font-size:calc(var(--u)*4.4);line-height:1.05}
+.goTxt{
+  color:var(--red);font-size:calc(var(--u)*4.4);font-weight:900;line-height:1.05;
+  --ow:calc(var(--u)*0.09);--oc:#7a0d12;
+  text-shadow:
+    var(--ow) 0 0 var(--oc), calc(var(--ow)*-1) 0 0 var(--oc),
+    0 var(--ow) 0 var(--oc), 0 calc(var(--ow)*-1) 0 var(--oc),
+    var(--ow) var(--ow) 0 var(--oc), calc(var(--ow)*-1) var(--ow) 0 var(--oc),
+    var(--ow) calc(var(--ow)*-1) 0 var(--oc), calc(var(--ow)*-1) calc(var(--ow)*-1) 0 var(--oc);
+}
+.goArrow{color:var(--red);font-size:calc(var(--u)*3);line-height:1.1}
+.tile.side-corner .tokens{
+  top:56%;left:5%;right:5%;bottom:4%;padding:0;
+  align-items:center;align-content:center;
+}
+/* Their artwork is centred, so pieces get a thin strip along the very bottom.
+   That strip is half the depth of a normal corner's, which is what makes the
+   pieces come out half size. */
+.tile.side-corner .tokens.halfTok{top:80%;left:4%;right:4%;bottom:2%}
+
+/* jail corner */
+.jailWrap{position:absolute;inset:0}
+.jailBox{
+  position:absolute;top:0;right:0;width:66%;height:66%;
+  background:#f2f2f2;border-left:calc(var(--u)*0.12) solid var(--ink);
+  border-bottom:calc(var(--u)*0.12) solid var(--ink);
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  padding-top:4%;
+}
+.jailBox .cap{font-size:calc(var(--u)*1.05);font-weight:800}
+.jailBars{font-size:calc(var(--u)*2.6);line-height:1}
+.jailVisit{
+  position:absolute;left:3%;bottom:1%;
+  font-size:calc(var(--u)*0.95);font-weight:700;text-transform:uppercase;
+  color:#333;line-height:1;
+}
+.jailStripe{position:absolute;left:0;top:0;width:34%;height:100%;background:var(--grp-orange)}
+
+/* Locked-up pieces go in the lower part of the cell, under "IN JAIL". */
+.jailedTokens{
+  position:absolute;top:33%;left:37%;right:3%;height:29%;z-index:7;
+  display:flex;flex-wrap:wrap;gap:calc(var(--u)*0.14);
+  align-items:center;justify-content:center;align-content:center;
+}
+/* Just-visiting pieces go in the clear strip under the jail box. */
+.tile.side-corner .tokens.jailFree{
+  top:69%;left:3%;right:3%;bottom:15%;padding:0;
+  align-items:center;align-content:center;
+}
+
+/* ---------- center ---------- */
+#center{
+  grid-column:2/10;grid-row:2/8;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:calc(var(--u)*0.5);position:relative;pointer-events:none;
+}
+.logoBox{
+  background:var(--red);border:calc(var(--u)*0.35) solid #111;
+  padding:calc(var(--u)*0.4) calc(var(--u)*2);
+}
+/* Outline drawn with layered shadows rather than -webkit-text-stroke.
+   A text-stroke straddles the glyph edge, so half of it lands inside the
+   letter and closes up the thin gaps; shadows sit strictly behind the fill. */
+.logoBox b{
+  color:#fff;font-size:calc(var(--u)*4.6);font-weight:900;letter-spacing:calc(var(--u)*0.1);
+  display:block;line-height:1.05;
+  --ow:calc(var(--u)*0.11);--oc:#12294a;
+  text-shadow:
+    var(--ow) 0 0 var(--oc), calc(var(--ow)*-1) 0 0 var(--oc),
+    0 var(--ow) 0 var(--oc), 0 calc(var(--ow)*-1) 0 var(--oc),
+    var(--ow) var(--ow) 0 var(--oc), calc(var(--ow)*-1) var(--ow) 0 var(--oc),
+    var(--ow) calc(var(--ow)*-1) 0 var(--oc), calc(var(--ow)*-1) calc(var(--ow)*-1) 0 var(--oc);
+}
+.sub{
+  font-size:calc(var(--u)*2.5);font-weight:900;letter-spacing:calc(var(--u)*0.14);
+  color:#fff;
+  --ow:calc(var(--u)*0.09);--oc:#12294a;
+  text-shadow:
+    var(--ow) 0 0 var(--oc), calc(var(--ow)*-1) 0 0 var(--oc),
+    0 var(--ow) 0 var(--oc), 0 calc(var(--ow)*-1) 0 var(--oc),
+    var(--ow) var(--ow) 0 var(--oc), calc(var(--ow)*-1) var(--ow) 0 var(--oc),
+    var(--ow) calc(var(--ow)*-1) 0 var(--oc), calc(var(--ow)*-1) calc(var(--ow)*-1) 0 var(--oc);
+}
+.deck{
+  position:absolute;width:19%;aspect-ratio:3/2;border:calc(var(--u)*0.1) dashed #111;
+  display:flex;align-items:center;justify-content:center;
+}
+.deckChance{left:0;top:2%;background:var(--grp-orange)}
+.deckChest{right:0;top:2%;background:#4aa3e0}
+.deckChance span{font-size:calc(var(--u)*3.4);color:var(--red);font-weight:900}
+.deckChest span{font-size:calc(var(--u)*3)}
+
+/* ---------- sidebar ---------- */
+#side{
+  flex:0 0 372px;background:var(--panel);border-left:3px solid #1d261d;
+  display:flex;flex-direction:column;min-height:0;
+}
+#side .scroll{overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:10px}
+
+.card{
+  background:#fff;border:2px solid #ddd;border-radius:10px;padding:9px 10px;
+  border-left-width:9px;
+}
+.cardTop{display:flex;align-items:center;gap:8px}
+.cardTop .chip{
+  width:68px;height:68px;border-radius:50%;background:#fffdf5;border:3px solid #222;
+  display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+}
+.cardTop .chip svg{width:74%;height:74%}
+.nameIn{
+  flex:1;min-width:0;border:1px solid #ccc;border-radius:6px;padding:5px 7px;
+  font-size:14px;font-weight:700;
+}
+.money{font-size:30px;font-weight:900;text-align:center;margin:5px 0 6px;letter-spacing:-.5px}
+.money.neg{color:#c62828}
+.row{display:flex;gap:5px;align-items:center}
+.row + .row{margin-top:5px}
+.amt{width:74px;border:1px solid #ccc;border-radius:6px;padding:6px;text-align:center;font-size:15px;font-weight:700}
+.bbtn{
+  flex:1;border:1px solid #bbb;background:#f0f0ee;border-radius:6px;padding:7px 4px;
+  font-size:13px;font-weight:700;
+}
+.bbtn:hover{background:#e2e2df}
+.bbtn.plus{background:#dcf2dc;border-color:#8ec48e}
+.bbtn.plus:hover{background:#c6e9c6}
+.bbtn.minus{background:#fadada;border-color:#dd9a9a}
+.bbtn.minus:hover{background:#f5c4c4}
+.bbtn.go{background:#fff2c9;border-color:#e0c268}
+.bbtn.sm{font-size:12px;padding:5px 4px}
+.metaRow{display:flex;justify-content:space-between;font-size:12px;color:#666;margin-top:6px;font-weight:600}
+
+.sect{background:#fff;border:2px solid #ddd;border-radius:10px;padding:9px 10px}
+.sect h3{margin:0 0 7px;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:#555}
+select{border:1px solid #ccc;border-radius:6px;padding:6px;font-size:13px;flex:1;min-width:0}
+
+/* ---------- modal ---------- */
+#veil{
+  position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;
+  align-items:center;justify-content:center;z-index:100;padding:20px;
+}
+#veil.on{display:flex}
+.modal{
+  background:#fff;border-radius:14px;max-width:620px;width:100%;
+  max-height:86vh;overflow-y:auto;padding:20px 22px;box-shadow:0 12px 50px rgba(0,0,0,.5);
+}
+.modal h2{margin:0 0 4px;font-size:24px}
+.modal .meta{color:#666;font-size:14px;margin-bottom:14px;font-weight:600}
+.modal h4{margin:16px 0 7px;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:#555}
+.ownerBtns{display:flex;flex-wrap:wrap;gap:7px}
+.ownerBtn{
+  border:2px solid #ccc;border-radius:9px;padding:8px 11px;background:#fff;
+  font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;
+}
+.ownerBtn svg{width:20px;height:20px}
+.ownerBtn.on{border-color:#111;background:#fffbe6;box-shadow:0 0 0 2px #ffd54f inset}
+.modal .close{
+  margin-top:18px;width:100%;padding:11px;border:none;border-radius:9px;
+  background:#1d261d;color:#fff;font-size:15px;font-weight:700;
+}
+.rules{font-size:14px;line-height:1.6}
+.rules li{margin-bottom:7px}
+.warnBox{background:#fff4e5;border:1px solid #f0c48a;border-radius:8px;padding:10px;font-size:13px;margin-top:12px}
+
+/* ---------- welcome screen ---------- */
+#welcome{
+  position:fixed;inset:0;z-index:200;background:#1d261d;
+  display:flex;align-items:center;justify-content:center;padding:24px;
+}
+#welcome .wbox{max-width:520px;width:100%;text-align:center}
+#welcome h1{
+  font-size:clamp(34px,7vw,58px);margin:0;letter-spacing:3px;font-weight:900;color:#fff;
+}
+#welcome h1 span{color:#ff6b6b}
+#welcome .wsub{
+  color:#a8c0a5;font-size:17px;font-weight:700;letter-spacing:2px;
+  text-transform:uppercase;margin:6px 0 34px;
+}
+.wbtn{
+  display:block;width:100%;margin:0 0 14px;padding:20px;
+  border:2px solid #6b7d68;border-radius:12px;background:#3d4d3b;color:#fff;
+  font-size:19px;font-weight:800;
+}
+.wbtn:hover{background:#526651}
+.wbtn.new{background:#2f6b3a;border-color:#54a065}
+.wbtn.new:hover{background:#3d8a4b}
+#welcome .wnote{color:#93a891;font-size:14px;line-height:1.5;margin-top:20px}
+#welcome .wnote b{color:#cfe0cd}
+
+@media (max-width:1150px){
+  #main{flex-direction:column}
+  #side{flex:0 0 auto;max-height:44vh;border-left:none;border-top:3px solid #1d261d}
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="topbar">
+    <h1>SMUN<span>OPOLY</span></h1>
+    <div id="hint">Click a game piece, then click the square to move it to.</div>
+    <div id="sync" class="ok">☁ Saved</div>
+    <button class="tbtn" id="btnUndo" title="Undo the last change">↶ Undo</button>
+    <button class="tbtn" id="btnHelp">? Rules</button>
+    <button class="tbtn" id="btnFull">⛶ Full Screen</button>
+    <button class="tbtn save" id="btnSave">💾 Save Game</button>
+    <button class="tbtn" id="btnLoad">📂 Continue Game</button>
+    <button class="tbtn warn" id="btnReset">Start Over</button>
+    <input type="file" id="fileIn" accept=".json" style="display:none">
+  </div>
+
+  <div id="main">
+    <div id="boardWrap"><div id="board"></div></div>
+
+    <div id="side">
+      <div class="scroll">
+        <div class="sect">
+          <h3>Pay Rent / Move Money</h3>
+          <div class="row">
+            <select id="payFrom"></select>
+            <span style="font-weight:800">→</span>
+            <select id="payTo"></select>
+          </div>
+          <div class="row">
+            <input class="amt" id="payAmt" type="number" placeholder="$" style="flex:1;width:auto">
+            <button class="bbtn" id="payGo" style="flex:0 0 96px">Pay</button>
+          </div>
+        </div>
+
+        <div id="teams"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="veil"><div class="modal" id="modal"></div></div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   1. Artwork
+   ============================================================ */
+const ICONS = {
+  surfboard: c => `<svg viewBox="0 0 100 100"><path d="M50 4C70 28 70 72 50 96C30 72 30 28 50 4Z" fill="${c}" stroke="#222" stroke-width="5" stroke-linejoin="round"/><path d="M50 16V84" stroke="#222" stroke-width="4"/></svg>`,
+  tree: c => `<svg viewBox="0 0 100 100"><rect x="43" y="70" width="14" height="26" fill="#6b4322" stroke="#222" stroke-width="4"/><path d="M50 46L86 82H14Z" fill="${c}" stroke="#222" stroke-width="5" stroke-linejoin="round"/><path d="M50 25L80 60H20Z" fill="${c}" stroke="#222" stroke-width="5" stroke-linejoin="round"/><path d="M50 4L74 38H26Z" fill="${c}" stroke="#222" stroke-width="5" stroke-linejoin="round"/></svg>`,
+  tophat: c => `<svg viewBox="0 0 100 100"><path d="M28 74V24Q28 15 50 15Q72 15 72 24V74Z" fill="${c}" stroke="#222" stroke-width="5" stroke-linejoin="round"/><rect x="28" y="52" width="44" height="12" fill="#222"/><ellipse cx="50" cy="76" rx="42" ry="11" fill="${c}" stroke="#222" stroke-width="5"/></svg>`,
+  duck: c => `<svg viewBox="0 0 100 100"><ellipse cx="45" cy="68" rx="36" ry="21" fill="${c}" stroke="#222" stroke-width="5"/><circle cx="68" cy="36" r="19" fill="${c}" stroke="#222" stroke-width="5"/><path d="M85 32L99 39L85 46Z" fill="#f5a623" stroke="#222" stroke-width="4" stroke-linejoin="round"/><circle cx="72" cy="30" r="3.6" fill="#222"/></svg>`,
+  hotel: c => `<svg viewBox="0 0 100 100"><path d="M4 40L50 10L96 40Z" fill="${c}" stroke="#111" stroke-width="7" stroke-linejoin="round"/><rect x="14" y="40" width="72" height="48" fill="${c}" stroke="#111" stroke-width="7"/><rect x="29" y="53" width="15" height="15" fill="#fff" stroke="#111" stroke-width="4"/><rect x="56" y="53" width="15" height="15" fill="#fff" stroke="#111" stroke-width="4"/></svg>`
+};
+
+/* Railroad, utility and Community Chest squares use plain emoji. */
+const EMOJI = {
+  rail:  '🚂',
+  util:  '💡',
+  chest: '💰'
+};
+
+/* ============================================================
+   2. Board data — read off "RA Training Monopoly.png"
+      Index 0 = GO (bottom-right). Movement goes GO -> left along
+      the bottom -> up the left side -> right across the top ->
+      down the right side -> back to GO.
+      EDIT NAMES / RENTS HERE if anything needs changing.
+   ============================================================ */
+const G = {gray:'var(--grp-gray)', teal:'var(--grp-teal)', blue:'var(--grp-blue)', orange:'var(--grp-orange)'};
+
+const TILES = [
+  {k:'corner', c:'go',   name:'GO'},                                  // 0
+  {k:'street', name:'Expectations',      rent:200, grp:'gray'},        // 1
+  {k:'street', name:'Zoom Phones',       rent:40,  grp:'gray'},        // 2
+  {k:'rail',   name:'Confidentiality',   rent:175},                    // 3
+  {k:'street', name:'Programming',       rent:150, grp:'gray'},        // 4
+  {k:'chest',  name:'Community Chest'},                                // 5
+  {k:'street', name:'ErezLife',          rent:100, grp:'gray'},        // 6
+  {k:'util',   name:'Maintenance',       rent:50},                     // 7
+  {k:'street', name:'Drug Trends',       rent:175, grp:'gray'},        // 8
+  {k:'corner', c:'jail', name:'Jail / Just Visiting'},                 // 9
+  {k:'rail',   name:'Budgeting',         rent:50},                     // 10
+  {k:'street', name:'Judicial Process',  rent:100, grp:'teal'},        // 11
+  {k:'chance', name:'Chance'},                                         // 12
+  {k:'street', name:'Maxient',           rent:150, grp:'teal'},        // 13
+  {k:'chest',  name:'Community Chest'},                                // 14
+  {k:'street', name:'Incident Report',   rent:120, grp:'teal'},        // 15
+  {k:'corner', c:'free', name:'Free Parking'},                         // 16
+  {k:'street', name:'Confrontation 101', rent:75,  grp:'blue'},        // 17
+  {k:'chance', name:'Chance'},                                         // 18
+  {k:'street', name:'BCDS',              rent:120, grp:'blue'},        // 19
+  {k:'street', name:'Program Pics',      rent:50,  grp:'blue'},        // 20
+  {k:'chest',  name:'Community Chest'},                                // 21
+  {k:'street', name:'Duty Rounds',       rent:100, grp:'blue'},        // 22
+  {k:'rail',   name:'Duty Logs',         rent:50},                     // 23
+  {k:'street', name:'Fire Extinguishers',rent:120, grp:'blue'},        // 24
+  {k:'corner', c:'gotojail', name:'Go To Jail'},                       // 25
+  {k:'street', name:'Door Decs',         rent:25,  grp:'orange'},      // 26
+  {k:'street', name:'Mental Health',     rent:125, grp:'orange'},      // 27
+  {k:'chance', name:'Chance'},                                         // 28
+  {k:'street', name:'CPR',               rent:120, grp:'orange'},      // 29
+  {k:'rail',   name:'Posters',           rent:50},                     // 30
+  {k:'street', name:'First Aid',         rent:100, grp:'orange'}       // 31
+];
+
+const JAIL = 9, GOTOJAIL = 25;
+
+/* Where each tile sits in the 10x8 grid, and which way its text faces. */
+function place(i){
+  if (i <= 9)  return {row:8, col:10 - i,     side:(i===0||i===9)?'corner':'bottom'};
+  if (i <= 16) return {row:8 - (i - 9), col:1, side:(i===16)?'corner':'left'};
+  if (i <= 25) return {row:1, col:1 + (i-16), side:(i===25)?'corner':'top'};
+  return              {row:1 + (i-25), col:10, side:'right'};
+}
+
+/* ============================================================
+   3. Teams — piece, colour and starting cash come from the doc
+   ============================================================ */
+const TEAM_DEFS = [
+  {icon:'surfboard', color:'#b8bcc0', label:'Silver Surfboard',  def:'Team Silver'},
+  {icon:'tree',      color:'#17696b', label:'Teal Evergreen',    def:'Team Teal'},
+  {icon:'tophat',    color:'#ef8b3c', label:'Orange Top Hat',    def:'Team Orange'},
+  {icon:'duck',      color:'#7ab8e8', label:'Light Blue Duck',   def:'Team Light Blue'}
+];
+const START_CASH = 1500;
+
+function freshState(){
+  return {
+    teams: TEAM_DEFS.map((d,i)=>({id:i, name:d.def, money:START_CASH, pos:0, jailed:false})),
+    owners: {},          // tile index -> team id
+    log: []
+  };
+}
+
+/* ============================================================
+   4. State, saving, undo
+
+   Saving works like a document. "Save Game" downloads a .json file to the
+   facilitator's computer; "Continue Game" opens one back up. That file is the
+   real save, and it travels — put it on a flash drive and the game picks up on
+   any other computer.
+
+   The browser also keeps a quiet copy of its own so that closing the tab by
+   accident does not cost anything. That copy is a safety net, not the save.
+   ============================================================ */
+const KEY = 'smunopoly.v1';
+
+/* Some browsers block storage when a page is opened from a file:// path. */
+const CAN_STORE = (() => {
+  try{ localStorage.setItem(KEY + '.test', '1'); localStorage.removeItem(KEY + '.test'); return true; }
+  catch(e){ return false; }
+})();
+
+let state = loadLocal() || freshState();
+let undoStack = [];
+let selected = null;     // team id currently picked up
+
+function loadLocal(){
+  try{ const raw = localStorage.getItem(KEY); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }
+}
+function saveLocal(){
+  try{
+    localStorage.setItem(KEY, JSON.stringify(state));
+    localStorage.setItem(KEY + '.unsaved', unsaved ? '1' : '0');
+  }catch(e){}
+}
+
+/* Changes made since the last time a game file was downloaded. Drives the
+   badge in the top bar and the warning on closing the tab. It survives a
+   refresh, so reopening the page cannot make the badge claim you are saved
+   up when you are not. */
+let unsaved = (() => {
+  try{ return localStorage.getItem(KEY + '.unsaved') === '1'; }catch(e){ return false; }
+})();
+
+function persist(){
+  unsaved = true;
+  saveLocal();
+  setSaveBadge();
+}
+
+function setSaveBadge(){
+  const el = document.getElementById('sync');
+  if (!el) return;
+  if (unsaved){
+    el.className = 'bad';
+    el.textContent = '● Unsaved changes';
+    el.title = 'Click "Save Game" to download the game file.';
+  } else {
+    el.className = 'ok';
+    el.textContent = '✓ Game saved';
+    el.title = 'Everything is in your downloaded game file.';
+  }
+}
+function snapshot(){
+  undoStack.push(JSON.stringify(state));
+  if (undoStack.length > 60) undoStack.shift();
+}
+function undo(){
+  if (!undoStack.length){ flash('Nothing left to undo.'); return; }
+  state = JSON.parse(undoStack.pop());
+  selected = null;
+  persist(); renderAll();
+}
+function note(msg){
+  const t = new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+  state.log.unshift(t + ' — ' + msg);
+  if (state.log.length > 200) state.log.pop();
+}
+const money = n => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString();
+
+/* ============================================================
+   5. Build the board
+   ============================================================ */
+const board = document.getElementById('board');
+
+function buildBoard(){
+  board.innerHTML = '';
+
+  TILES.forEach((t, i) => {
+    const p = place(i);
+    const el = document.createElement('div');
+    el.className = 'tile clickable side-' + p.side;
+    el.style.gridRow = p.row;
+    el.style.gridColumn = p.col;
+    el.dataset.i = i;
+
+    if (t.k === 'corner'){
+      el.innerHTML = cornerHTML(t);
+    } else {
+      // Top and bottom squares are narrow, so long names get a smaller size.
+      // The left and right squares are wide and can take a bigger one.
+      const wide = (p.side === 'left' || p.side === 'right');
+      const longest = Math.max(...t.name.split(' ').map(w => w.length));
+      const nm = wide ? 1.25 : longest >= 14 ? 0.75 : longest >= 12 ? 0.85 : longest >= 10 ? 0.95 : 1.05;
+      el.style.setProperty('--nm', nm);
+      el.style.setProperty('--rt', wide ? 1.05 : 0.9);
+      el.innerHTML = faceHTML(t);
+    }
+
+    el.addEventListener('click', () => tileClick(i));
+    board.appendChild(el);
+  });
+
+  const c = document.createElement('div');
+  c.id = 'center';
+  c.innerHTML = `
+    <div class="deck deckChance"><span>?</span></div>
+    <div class="deck deckChest"><span>${EMOJI.chest}</span></div>
+    <div class="logoBox"><b>SMUNOPOLY</b></div>
+    <div class="sub">RA TRAINING</div>`;
+  board.appendChild(c);
+}
+
+function faceHTML(t){
+  let bar = '', body = '';
+  if (t.k === 'street'){
+    bar = `<div class="bar" style="background:${G[t.grp]}"></div>`;
+    body = `<div class="tname">${t.name}</div><div class="trent">RENT $${t.rent}</div>`;
+  } else if (t.k === 'rail'){
+    body = `<div class="tname">${t.name}</div><div class="ticon">${EMOJI.rail}</div><div class="trent">RENT $${t.rent}</div>`;
+  } else if (t.k === 'util'){
+    body = `<div class="tname">${t.name}</div><div class="ticon">${EMOJI.util}</div><div class="trent">RENT $${t.rent}</div>`;
+  } else if (t.k === 'chest'){
+    body = `<div class="tname">Community Chest</div><div class="ticon">${EMOJI.chest}</div>`;
+  } else if (t.k === 'chance'){
+    body = `<div class="tname">Chance</div><div class="qmark">?</div>`;
+  }
+  return `${bar}<div class="label">${body}</div>
+          <div class="hotelSlot" data-hotel></div>
+          <div class="tokens" data-tokens></div>`;
+}
+
+function cornerHTML(t){
+  if (t.c === 'go') return `
+    <div class="cornerInner mid"><div class="goTxt">GO</div><div class="goArrow">⬅</div>
+      <div class="sm" style="margin-top:1%">Collect $200</div></div>
+    <div class="tokens halfTok" data-tokens></div>`;
+
+  if (t.c === 'jail') return `
+    <div class="jailWrap">
+      <div class="jailStripe"></div>
+      <div class="jailBox"><div class="jailBars">🚔</div><div class="cap">IN JAIL</div></div>
+      <div class="jailVisit">Just<br>Visiting</div>
+    </div>
+    <div class="jailedTokens" data-jailed></div>
+    <div class="tokens jailFree" data-tokens></div>`;
+
+  if (t.c === 'free') return `
+    <div class="cornerInner mid"><div class="sm">Free</div><div class="emoji">🚗</div>
+      <div class="sm">Parking</div><div class="sm" style="font-weight:500;text-transform:none">Just relax!</div></div>
+    <div class="tokens halfTok" data-tokens></div>`;
+
+  return `
+    <div class="cornerInner"><div class="sm">Go To</div><div class="emoji">👮</div><div class="sm">Jail</div></div>
+    <div class="tokens" data-tokens></div>`;
+}
+
+/* Everything on the board is sized in --u, which is 1% of the board's width.
+   That way the whole thing scales cleanly to any screen or projector. */
+let lastW = 0;
+function sizeBoard(){
+  const w = board.getBoundingClientRect().width;   // border-box: stable, so no resize loop
+  if (!w || Math.abs(w - lastW) < 0.5) return;
+  lastW = w;
+  board.style.setProperty('--u', (w / 100) + 'px');
+  sizeTokens();
+}
+
+/* ============================================================
+   6. Draw pieces + hotels
+   ============================================================ */
+function renderBoardPieces(){
+  board.querySelectorAll('[data-tokens],[data-jailed]').forEach(n => { n.innerHTML = ''; n.style.removeProperty('--tok'); });
+  board.querySelectorAll('[data-hotel]').forEach(n => n.innerHTML = '');
+
+  state.teams.forEach(tm => {
+    const tile = board.querySelector('.tile[data-i="' + tm.pos + '"]');
+    if (!tile) return;
+    const holder = (tm.jailed && tm.pos === JAIL)
+      ? tile.querySelector('[data-jailed]')
+      : tile.querySelector('[data-tokens]');
+    if (!holder) return;
+
+    const d = TEAM_DEFS[tm.id];
+    const chip = document.createElement('div');
+    chip.className = 'tok' + (selected === tm.id ? ' sel' : '');
+    chip.title = tm.name + (tm.jailed ? ' (in jail)' : '');
+    chip.innerHTML = ICONS[d.icon](d.color);
+    chip.addEventListener('click', ev => { ev.stopPropagation(); pickToken(tm.id); });
+    holder.appendChild(chip);
+  });
+
+  sizeTokens();
+
+  Object.entries(state.owners).forEach(([i, teamId]) => {
+    const slot = board.querySelector('.tile[data-i="' + i + '"] [data-hotel]');
+    if (slot) slot.innerHTML = ICONS.hotel(TEAM_DEFS[teamId].color);
+  });
+}
+
+/* Pieces are confined to the clear strip between a square's name and its rent,
+   so no wording is ever covered. Whatever room that leaves is then split so
+   every piece sharing the square fits beside the others, never on top. */
+function sizeTokens(){
+  board.querySelectorAll('[data-tokens],[data-jailed]').forEach(holder => {
+    if (!holder.childElementCount) return;
+    if (holder.hasAttribute('data-tokens')) carveZone(holder);
+    fitPieces(holder);
+  });
+}
+
+/* Shrink the piece area down to the gap between the name and the rent. */
+function carveZone(holder){
+  const tile = holder.closest('.tile');
+  const lab  = tile && tile.querySelector('.label');
+  if (!lab) return;                       // corners keep their CSS-set zone
+
+  const tr  = tile.getBoundingClientRect();
+  const cs  = getComputedStyle(lab);
+  const air = tr.height * 0.04;           // breathing room around the words
+
+  const left   = parseFloat(cs.paddingLeft);
+  const right  = tr.width - parseFloat(cs.paddingRight);
+  let   top    = parseFloat(cs.paddingTop);
+  let   bottom = tr.height - parseFloat(cs.paddingBottom);
+
+  const nm = tile.querySelector('.tname');
+  if (nm) top = Math.max(top, nm.getBoundingClientRect().bottom - tr.top + air);
+  const rt = tile.querySelector('.trent');
+  if (rt) bottom = Math.min(bottom, rt.getBoundingClientRect().top - tr.top - air);
+
+  const s = holder.style;
+  s.padding = '0';
+  s.right = s.bottom = 'auto';
+  s.left = left + 'px';
+  s.top = top + 'px';
+  s.width  = Math.max(0, right - left) + 'px';
+  s.height = Math.max(0, bottom - top) + 'px';
+}
+
+/* Largest piece size where all of them still fit in the zone side by side. */
+function fitPieces(holder){
+  const n  = holder.childElementCount;
+  const cs = getComputedStyle(holder);
+  const W  = holder.clientWidth  - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const H  = holder.clientHeight - parseFloat(cs.paddingTop)  - parseFloat(cs.paddingBottom);
+  const gap = parseFloat(cs.columnGap) || 0;
+  if (W <= 0 || H <= 0) return;
+
+  let best = 0;
+  for (let cols = 1; cols <= n; cols++){
+    const rows = Math.ceil(n / cols);
+    best = Math.max(best, Math.min((W - gap * (cols - 1)) / cols,
+                                   (H - gap * (rows - 1)) / rows));
+  }
+  best = Math.min(best, Math.min(W, H) * 0.95);
+  holder.style.setProperty('--tok', Math.max(6, Math.floor(best)) + 'px');
+}
+
+/* ============================================================
+   7. Moving a piece: click piece, then click square
+   ============================================================ */
+function pickToken(id){
+  selected = (selected === id) ? null : id;
+  board.classList.toggle('picking', selected !== null);
+  renderBoardPieces();
+  setHint();
+}
+
+function tileClick(i){
+  if (selected !== null){
+    const tm = state.teams[selected];
+    snapshot();
+    tm.pos = i;
+    // Landing on the jail corner on your own is only "just visiting".
+    if (i === JAIL) tm.jailed = false;
+    if (i === GOTOJAIL){ tm.pos = JAIL; tm.jailed = true; note(tm.name + ' was sent to Jail.'); }
+    else note(tm.name + ' moved to ' + TILES[tm.pos].name + '.');
+    selected = null;
+    board.classList.remove('picking');
+    persist(); renderAll();
+    return;
+  }
+  openTile(i);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape'){
+    if (document.getElementById('veil').classList.contains('on')) return closeModal();
+    if (selected !== null){ selected = null; board.classList.remove('picking'); renderBoardPieces(); setHint(); }
+  }
+});
+
+function setHint(){
+  const h = document.getElementById('hint');
+  if (selected !== null){
+    h.className = 'active';
+    h.textContent = 'Now click the square to move ' + state.teams[selected].name + ' to.  (Esc to cancel)';
+  } else {
+    h.className = '';
+    h.textContent = 'Click a game piece, then click the square to move it to.  Click a square for hotels & rent.';
+  }
+}
+function flash(msg){
+  const h = document.getElementById('hint');
+  const old = h.textContent, cls = h.className;
+  h.className = 'active'; h.textContent = msg;
+  setTimeout(() => { h.textContent = old; h.className = cls; }, 1800);
+}
+
+/* ============================================================
+   8. Square popup — hotels and rent
+   ============================================================ */
+const veil = document.getElementById('veil');
+const modal = document.getElementById('modal');
+function closeModal(){ veil.classList.remove('on'); }
+veil.addEventListener('click', e => { if (e.target === veil) closeModal(); });
+
+const GROUP_LABEL = {gray:'Silver group', teal:'Teal group', blue:'Light blue group', orange:'Orange group'};
+
+function openTile(i){
+  const t = TILES[i];
+  const buyable = (t.k === 'street' || t.k === 'rail' || t.k === 'util');
+  const owner = state.owners[i];
+
+  let sub = '';
+  if (t.k === 'street') sub = 'Rent $' + t.rent + ' · ' + GROUP_LABEL[t.grp];
+  else if (t.k === 'rail') sub = 'Railroad · Rent $' + t.rent;
+  else if (t.k === 'util') sub = 'Utility · rent is the dice roll × 4';
+  else sub = 'Draw a card';
+
+  let html = `<h2>${t.name}</h2><div class="meta">${sub}</div>`;
+
+  if (buyable){
+    html += `<h4>Hotel on this square</h4><div class="ownerBtns">`;
+    html += `<button class="ownerBtn ${owner === undefined ? 'on' : ''}" data-own="none">No hotel</button>`;
+    TEAM_DEFS.forEach((d, id) => {
+      html += `<button class="ownerBtn ${owner === id ? 'on' : ''}" data-own="${id}">
+                 ${ICONS.hotel(d.color)} ${state.teams[id].name}</button>`;
+    });
+    html += `</div>`;
+
+    const payee = owner === undefined ? 'the bank' : state.teams[owner].name;
+    html += `<h4>Charge rent — paid to ${payee}</h4>
+      <div class="row" style="margin-bottom:8px">
+        <input class="amt" id="rentAmt" type="number" value="${t.rent}" style="flex:0 0 110px">
+        <span style="font-size:13px;color:#666">← change this for utilities or a deal</span>
+      </div>
+      <div class="ownerBtns">`;
+    TEAM_DEFS.forEach((d, id) => {
+      html += `<button class="ownerBtn" data-charge="${id}">${ICONS[d.icon](d.color)} ${state.teams[id].name} pays</button>`;
+    });
+    html += `</div>`;
+  } else if (t.k === 'chance'){
+    html += `<div class="warnBox">Draw a <b>Chance</b> card and follow its instructions. Use the money buttons on the right to make the change.</div>`;
+  } else if (t.k === 'chest'){
+    html += `<div class="warnBox">Draw a <b>Community Chest</b> card. The team picks between the two options on the card.</div>`;
+  } else if (t.k === 'corner'){
+    const txt = {
+      go:'Every team collects $200 each time they pass over GO.',
+      jail:'Landed here on your own? You are Just Visiting. Sent here by the jailer? Your turn is over — you still collect rent and can still bid, you just do not collect $200 for GO.',
+      free:'Nothing happens. Just relax!',
+      gotojail:'Move the piece straight to Jail. Use the "Send to Jail" button on that team\'s card.'
+    }[t.c];
+    html += `<div class="warnBox">${txt}</div>`;
+  }
+
+  html += `<button class="close">Close</button>`;
+  modal.innerHTML = html;
+
+  modal.querySelectorAll('[data-own]').forEach(b => b.addEventListener('click', () => {
+    snapshot();
+    const v = b.dataset.own;
+    if (v === 'none'){ delete state.owners[i]; note('Hotel removed from ' + t.name + '.'); }
+    else { state.owners[i] = +v; note(state.teams[+v].name + ' put a hotel on ' + t.name + '.'); }
+    persist(); renderAll(); openTile(i);
+  }));
+
+  modal.querySelectorAll('[data-charge]').forEach(b => b.addEventListener('click', () => {
+    const amt = Math.round(+modal.querySelector('#rentAmt').value || 0);
+    if (!amt) return;
+    const payer = +b.dataset.charge;
+    if (owner === payer){ flash('That team owns this square — no rent owed.'); return; }
+    snapshot();
+    state.teams[payer].money -= amt;
+    if (owner !== undefined) state.teams[owner].money += amt;
+    note(state.teams[payer].name + ' paid ' + money(amt) + ' rent on ' + t.name +
+         ' to ' + (owner === undefined ? 'the bank' : state.teams[owner].name) + '.');
+    persist(); renderAll(); closeModal();
+  }));
+
+  modal.querySelector('.close').addEventListener('click', closeModal);
+  veil.classList.add('on');
+}
+
+/* ============================================================
+   9. Team cards
+   ============================================================ */
+function renderTeams(){
+  const wrap = document.getElementById('teams');
+  wrap.innerHTML = '';
+
+  state.teams.forEach(tm => {
+    const d = TEAM_DEFS[tm.id];
+    const hotels = Object.values(state.owners).filter(o => o === tm.id).length;
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.borderLeftColor = d.color;
+    card.innerHTML = `
+      <div class="cardTop">
+        <div class="chip" title="${d.label}">${ICONS[d.icon](d.color)}</div>
+        <input class="nameIn" value="${escapeHtml(tm.name)}" data-name maxlength="24" title="Type this area's company name">
+      </div>
+      <div class="money ${tm.money < 0 ? 'neg' : ''}">${money(tm.money)}</div>
+      <div class="row">
+        <button class="bbtn minus" data-sign="-1">− Take</button>
+        <input class="amt" data-amt type="number" placeholder="50">
+        <button class="bbtn plus" data-sign="1">+ Add</button>
+      </div>
+      <div class="row">
+        <button class="bbtn sm go" data-quick="200">+$200 GO</button>
+        <button class="bbtn sm" data-quick="50">+$50</button>
+        <button class="bbtn sm" data-quick="100">+$100</button>
+        <button class="bbtn sm" data-jail>${tm.jailed ? 'Release' : 'Send to Jail'}</button>
+      </div>
+      <div class="metaRow"><span>🏨 ${hotels} hotel${hotels === 1 ? '' : 's'}</span>
+        <span>${tm.jailed ? '🚔 In Jail' : 'On: ' + TILES[tm.pos].name}</span></div>`;
+
+    const amtBox = card.querySelector('[data-amt]');
+    const readAmt = () => Math.round(Math.abs(+amtBox.value || 0));
+
+    card.querySelectorAll('[data-sign]').forEach(b => b.addEventListener('click', () => {
+      const a = readAmt();
+      if (!a){ amtBox.focus(); flash('Type an amount first.'); return; }
+      const s = +b.dataset.sign;
+      snapshot();
+      tm.money += s * a;
+      note(tm.name + (s > 0 ? ' received ' : ' paid ') + money(a) + '.');
+      amtBox.value = '';
+      persist(); renderAll();
+    }));
+
+    card.querySelectorAll('[data-quick]').forEach(b => b.addEventListener('click', () => {
+      snapshot();
+      const a = +b.dataset.quick;
+      tm.money += a;
+      note(tm.name + ' received ' + money(a) + (a === 200 ? ' for passing GO.' : '.'));
+      persist(); renderAll();
+    }));
+
+    card.querySelector('[data-jail]').addEventListener('click', () => {
+      snapshot();
+      if (tm.jailed){ tm.jailed = false; note(tm.name + ' was released from Jail.'); }
+      else { tm.jailed = true; tm.pos = JAIL; note(tm.name + ' was sent to Jail.'); }
+      persist(); renderAll();
+    });
+
+    const nameIn = card.querySelector('[data-name]');
+    nameIn.addEventListener('change', () => {
+      const v = nameIn.value.trim() || d.def;
+      if (v === tm.name) return;
+      snapshot();
+      note('"' + tm.name + '" renamed to "' + v + '".');
+      tm.name = v;
+      persist(); renderAll();
+    });
+
+    wrap.appendChild(card);
+  });
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ============================================================
+   10. Money transfer row
+   ============================================================ */
+function renderTransfer(){
+  const from = document.getElementById('payFrom'), to = document.getElementById('payTo');
+  const keepF = from.value, keepT = to.value;
+  const opts = state.teams.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+  from.innerHTML = opts;
+  to.innerHTML = `<option value="bank">The Bank</option>` + opts;
+  from.value = keepF || '0';
+  to.value = keepT || 'bank';
+}
+
+document.getElementById('payGo').addEventListener('click', () => {
+  const amt = Math.round(Math.abs(+document.getElementById('payAmt').value || 0));
+  if (!amt) return flash('Type an amount to pay.');
+  const f = +document.getElementById('payFrom').value;
+  const tv = document.getElementById('payTo').value;
+  if (tv !== 'bank' && +tv === f) return flash('Pick two different teams.');
+  snapshot();
+  state.teams[f].money -= amt;
+  if (tv !== 'bank') state.teams[+tv].money += amt;
+  note(state.teams[f].name + ' paid ' + money(amt) + ' to ' +
+       (tv === 'bank' ? 'the bank' : state.teams[+tv].name) + '.');
+  document.getElementById('payAmt').value = '';
+  persist(); renderAll();
+});
+
+/* ============================================================
+   11. Toolbar
+   ============================================================ */
+document.getElementById('btnUndo').addEventListener('click', undo);
+
+document.getElementById('btnFull').addEventListener('click', () => {
+  const d = document, el = d.documentElement;
+  if (d.fullscreenElement || d.webkitFullscreenElement){
+    (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+  } else {
+    (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
+  }
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  if (!confirm('Start a brand new game?\n\nEvery team goes back to $1,500, all hotels come off the board and all pieces return to GO.')) return;
+  if (!confirm('Last check — this cannot be undone with the Undo button. Start over?')) return;
+  snapshot();
+  state = freshState();
+  selected = null;
+  persist(); renderAll();
+});
+
+/* ---------- Save Game: download the whole game as one file ---------- */
+function saveGameFile(){
+  const stamp = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const name = 'smunopoly-'
+    + stamp.getFullYear() + '-' + pad(stamp.getMonth() + 1) + '-' + pad(stamp.getDate())
+    + '-' + pad(stamp.getHours()) + pad(stamp.getMinutes()) + '.json';
+
+  const payload = {smunopoly: 1, savedAt: stamp.toISOString(), game: state};
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+
+  unsaved = false;
+  saveLocal();
+  setSaveBadge();
+  flash('Saved as ' + name + ' — check your Downloads folder.');
+}
+document.getElementById('btnSave').addEventListener('click', saveGameFile);
+
+/* ---------- Continue Game: open a game file back up ---------- */
+document.getElementById('btnLoad').addEventListener('click', () => {
+  if (unsaved && !confirm('This board has changes you have not saved to a file yet.\n\nOpening a saved game will replace them. Continue anyway?')) return;
+  document.getElementById('fileIn').click();
+});
+
+document.getElementById('fileIn').addEventListener('change', e => {
+  const f = e.target.files[0];
+  e.target.value = '';                       // so picking the same file twice still fires
+  if (!f) return;
+
+  const r = new FileReader();
+  r.onerror = () => alert('That file could not be read. Try again, or pick a different copy.');
+  r.onload = () => {
+    let game;
+    try{
+      const d = JSON.parse(r.result);
+      // Newer files wrap the game; the very first ones were the game itself.
+      game = d && d.game ? d.game : d;
+      if (!game || !Array.isArray(game.teams) || game.teams.length !== 4){
+        throw new Error('not a Smunopoly file');
+      }
+      game.teams.forEach(t => {
+        if (typeof t.money !== 'number' || typeof t.pos !== 'number') throw new Error('damaged file');
+      });
+    }catch(err){
+      alert('That does not look like a saved Smunopoly game.\n\nPick a file whose name starts with "smunopoly-" and ends in .json.');
+      return;
+    }
+
+    snapshot();
+    state = game;
+    state.owners = state.owners || {};
+    state.log = state.log || [];
+    selected = null;
+    board.classList.remove('picking');
+
+    unsaved = false;                          // freshly loaded copy matches its file
+    saveLocal();
+    setSaveBadge();
+    renderAll();
+    closeWelcome();
+    flash('Game loaded — carry on where you left off.');
+  };
+  r.readAsText(f);
+});
+
+document.getElementById('btnHelp').addEventListener('click', () => {
+  modal.innerHTML = `
+    <h2>How to run the board</h2>
+    <div class="meta">Resident Assistant Training 2026-2027</div>
+    <ol class="rules">
+      <li><b>Move a piece:</b> click the piece, then click the square it should land on. Press Esc to cancel.</li>
+      <li><b>Money:</b> each team card on the right has <b>+ Add</b> and <b>− Take</b>. Type an amount and click one. <b>+$200 GO</b> is there for passing GO.</li>
+      <li><b>Rent between teams:</b> use <i>Pay Rent / Move Money</i>, or click the square itself and use <b>Charge rent</b> — it takes from one team and pays the owner automatically.</li>
+      <li><b>Hotels:</b> click a square, then click the team that won the bid. The hotel appears in that team's colour. Click <b>No hotel</b> to take it off.</li>
+      <li><b>Made a mistake?</b> Hit <b>↶ Undo</b> at the top.</li>
+      <li><b>Saving.</b> Click <b>💾 Save Game</b> at the end of each day. It drops a file into your Downloads folder called something like <i>smunopoly-2026-08-14-1630.json</i>. That file <b>is</b> the game.</li>
+      <li><b>Picking back up.</b> Open the website, click <b>📂 Continue Game</b>, and choose your saved file. The board comes back exactly as you left it — on any computer. Put the file on a flash drive and you can carry the game to a different laptop.</li>
+      <li><b>Watch the badge</b> next to the buttons. <b>✓ Game saved</b> means your file is up to date. <b>● Unsaved changes</b> means you have moved things since your last save — click Save Game again. You will also get a warning if you try to close the tab with unsaved changes.</li>
+      <li>The browser quietly remembers the game too, so an accidental tab close is not a disaster. Do not rely on it though — the file is the real save.</li>
+    </ol>
+    <h4>The training rules</h4>
+    <ul class="rules">
+      <li>Every team starts with <b>$1,500</b>.</li>
+      <li>After each session, teams bid on that square starting at <b>$10</b>. The highest bid answers a question about the session. <b>They pay their bid either way.</b> Right answer = hotel on the square. Wrong answer = the next highest bid gets a try, and the first team does not get their bid back. If nobody gets it, nobody gets the hotel.</li>
+      <li>Teams roll the big dice each morning and after lunch. Doubles = move and roll again. Three doubles in a row = Jail.</li>
+      <li><b>Streets, railroads and utilities:</b> pay rent to the bank, or to the team that owns it. Utility rent is the dice roll × 4 (× 10 if one team owns both).</li>
+      <li><b>Chance:</b> follow the card. <b>Community Chest:</b> draw a card and choose between the two options.</li>
+      <li><b>Passing GO:</b> collect $200. <b>Free Parking:</b> nothing happens.</li>
+      <li><b>Jail:</b> landing there on your own is Just Visiting. Sent there by the jailer, your turn ends — you still collect rent and can still bid, but no $200 for GO.</li>
+      <li><b>Deals:</b> teams may buy, sell or swap squares any time the banker approves.</li>
+      <li><b>Hall Directors</b> each hold eight $50 bills to reward RAs going above and beyond — never to their own team.</li>
+      <li><b>Team builders</b> with places pay 1st $100, 2nd $75, 3rd $50, 4th $25.</li>
+      <li><b>Can't pay?</b> Sell squares to other teams, or back to the bank for half.</li>
+      <li><b>Winning:</b> hotels set your starting place for the Res Life Cup. Leftover cash trades for prizes.</li>
+      <li>No title deeds, no houses, no mortgages. Rent never changes from what the board says.</li>
+    </ul>
+    <button class="close">Close</button>`;
+  modal.querySelector('.close').addEventListener('click', closeModal);
+  veil.classList.add('on');
+});
+
+window.addEventListener('beforeunload', e => {
+  saveLocal();
+  if (unsaved){ e.preventDefault(); e.returnValue = ''; }
+});
+
+if (!CAN_STORE){
+  const b = document.createElement('div');
+  b.style.cssText = 'background:#8a2b2b;color:#fff;padding:8px 14px;font-size:14px;font-weight:700;text-align:center';
+  b.textContent = 'This browser will not remember the game on its own. Click 💾 Save Game often — that file is your only copy.';
+  document.getElementById('app').insertBefore(b, document.getElementById('main'));
+}
+
+/* ============================================================
+   12. Welcome screen — only when there is no game in progress
+   ============================================================ */
+function closeWelcome(){
+  const w = document.getElementById('welcome');
+  if (w) w.remove();
+}
+
+function showWelcome(){
+  const w = document.createElement('div');
+  w.id = 'welcome';
+  w.innerHTML = `
+    <div class="wbox">
+      <h1>SMUN<span>OPOLY</span></h1>
+      <p class="wsub">Resident Assistant Training</p>
+      <button class="wbtn new" id="wNew">Start a New Game</button>
+      <button class="wbtn" id="wLoad">📂 Continue a Saved Game</button>
+      <p class="wnote">Continuing? Pick the <b>smunopoly-….json</b> file you downloaded
+      last time. It will be in your Downloads folder.</p>
+    </div>`;
+  document.body.appendChild(w);
+  w.querySelector('#wNew').addEventListener('click', () => {
+    state = freshState();
+    selected = null;
+    unsaved = false; saveLocal(); setSaveBadge();
+    renderAll();
+    closeWelcome();
+  });
+  w.querySelector('#wLoad').addEventListener('click', () => document.getElementById('fileIn').click());
+}
+
+/* ============================================================
+   12. Go
+   ============================================================ */
+function renderAll(){
+  renderBoardPieces();
+  renderTeams();
+  renderTransfer();
+  setHint();
+}
+
+buildBoard();
+sizeBoard();
+renderAll();
+
+new ResizeObserver(() => { sizeBoard(); }).observe(board);
+window.addEventListener('load', () => { sizeBoard(); renderBoardPieces(); });
+
+setSaveBadge();
+
+/* A game already going on this computer just carries on. A blank slate gets
+   the choice between starting fresh and opening a saved file. */
+if (!loadLocal()) showWelcome();
+</script>
+</body>
+</html>
