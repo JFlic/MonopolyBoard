@@ -195,7 +195,7 @@ input{font:inherit}
 .tile.side-corner .tokens.halfTok{top:80%;left:4%;right:4%;bottom:2%}
 
 /* jail corner */
-.jailWrap{position:absolute;inset:0}
+.jailWrap{position:absolute;inset:0;background:var(--grp-orange)}
 .jailBox{
   position:absolute;top:0;right:0;width:66%;height:66%;
   background:#f2f2f2;border-left:calc(var(--u)*0.12) solid var(--ink);
@@ -210,8 +210,6 @@ input{font:inherit}
   font-size:calc(var(--u)*0.95);font-weight:700;text-transform:uppercase;
   color:#333;line-height:1;
 }
-.jailStripe{position:absolute;left:0;top:0;width:34%;height:100%;background:var(--grp-orange)}
-
 /* Locked-up pieces go in the lower part of the cell, under "IN JAIL". */
 .jailedTokens{
   position:absolute;top:33%;left:37%;right:3%;height:29%;z-index:7;
@@ -372,7 +370,7 @@ select{border:1px solid #ccc;border-radius:6px;padding:6px;font-size:13px;flex:1
 
 <div id="app">
   <div id="topbar">
-    <h1>SMUN<span>OPOLY</span></h1>
+    <h1>SMU<span>NOPOLY</span></h1>
     <div id="hint">Click a game piece, then click the square to move it to.</div>
     <div id="sync" class="ok">☁ Saved</div>
     <button class="tbtn" id="btnUndo" title="Undo the last change">↶ Undo</button>
@@ -652,7 +650,6 @@ function cornerHTML(t){
 
   if (t.c === 'jail') return `
     <div class="jailWrap">
-      <div class="jailStripe"></div>
       <div class="jailBox"><div class="jailBars">🚔</div><div class="cap">IN JAIL</div></div>
       <div class="jailVisit">Just<br>Visiting</div>
     </div>
@@ -1135,7 +1132,7 @@ document.getElementById('btnHelp').addEventListener('click', () => {
       <li><b>Jail:</b> landing there on your own is Just Visiting. Sent there by the jailer, your turn ends — you still collect rent and can still bid, but no $200 for GO.</li>
       <li><b>Deals:</b> teams may buy, sell or swap squares any time the banker approves.</li>
       <li><b>Hall Directors</b> each hold eight $50 bills to reward RAs going above and beyond — never to their own team.</li>
-      <li><b>Team builders</b> with places pay 1st $100, 2nd $75, 3rd $50, 4th $25.</li>
+      <li><b>Team builders</b> with places earn 1st $100, 2nd $75, 3rd $50, 4th $25.</li>
       <li><b>Can't pay?</b> Sell squares to other teams, or back to the bank for half.</li>
       <li><b>Winning:</b> hotels set your starting place for the Res Life Cup. Leftover cash trades for prizes.</li>
       <li>No title deeds, no houses, no mortgages. Rent never changes from what the board says.</li>
