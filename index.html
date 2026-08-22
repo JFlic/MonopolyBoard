@@ -1089,7 +1089,10 @@ document.getElementById('fileIn').addEventListener('change', e => {
       return;
     }
 
-    snapshot();
+    /* The opened file becomes the whole board, so nothing before it is worth
+       stepping back to. Undo must not reach past the load — one click of it
+       used to throw the whole opened game away, hotels and all. */
+    undoStack = [];
     state = game;
     state.owners = state.owners || {};
     state.log = state.log || [];
@@ -1177,6 +1180,7 @@ function showWelcome(){
   document.body.appendChild(w);
   w.querySelector('#wNew').addEventListener('click', () => {
     state = freshState();
+    undoStack = [];
     selected = null;
     unsaved = false; saveLocal(); setSaveBadge();
     renderAll();
